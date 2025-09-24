@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Suomi ↔ Englanti Sanakoe</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --muted: #94a3b8;
+      --text: #e5e7eb;
+      --accent: #22d3ee;
+      --good: #34d399;
+      --bad: #f43f5e;
+    }
+    body {
+      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      background: radial-gradient(1200px 800px at 70% -10%, #1f2937 0%, var(--bg) 40%);
+      color: var(--text);
+      display: grid; place-items: center; height: 100vh;
+    }
+    .card {
+      width: min(900px, 92vw);
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 30px 60px rgba(0,0,0,0.45);
+      border-radius: 18px; padding: 28px;
+    }
+    h1 { font-size: clamp(22px, 3.2vw, 32px); margin: 0 0 6px; }
+    .sub { color: var(--muted); margin-bottom: 18px; }
+    .mode { display: inline-flex; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; overflow: hidden; }
+    .mode button { background: transparent; color: var(--text); border: none; padding: 10px 14px; cursor: pointer; }
+    .mode button.active { background: rgba(34,211,238,0.12); color: white; }
+    .prompt { font-size: 20px; background: #0b1220; border: 1px solid rgba(255,255,255,0.08); padding: 16px; border-radius: 14px; margin: 18px 0 8px; }
+    input[type="text"] { width: 100%; font-size: 18px; padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); background: #0a0f1a; color: var(--text); }
+    .controls { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+    .btn { border: 1px solid rgba(255,255,255,0.12); background: #0b1220; color: var(--text); padding: 10px 14px; border-radius: 12px; cursor: pointer; }
+    .btn.primary { background: rgba(34,211,238,.25); border-color: rgba(34,211,238,.5); }
+    .feedback { margin-top: 10px; min-height: 28px; font-weight: 600; }
+    .good { color: var(--good); }
+    .bad { color: var(--bad); }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Suomi ↔ Englanti Sanakoe</h1>
+
+    <div class="row" style="margin-bottom:8px">
+      <div class="mode">
+        <button id="modeFiEn" class="active">SU → EN</button>
+        <button id="modeEnFi">EN → SU</button>
+      </div>
+      <span style="flex:1"></span>
+      <div class="stat"><span id="done">0</span>/<span id="total">0</span> • ✅ <span id="right">0</span> • ❌ <span id="wrong">0</span></div>
+    </div>
+
+    <div id="prompt" class="prompt">Ladataan…</div>
+    <input id="answer" type="text" placeholder="Kirjoita vastauksesi ja paina Enter" />
+
+    <div class="controls">
+      <button id="checkBtn" class="btn primary">Tarkista (Enter)</button>
+      <button id="showBtn" class="btn">Näytä vastaus</button>
+      <button id="skipBtn" class="btn">Ohita</button>
+      <button id="resetBtn" class="btn">Aloita alusta</button>
+    </div>
+
+    <div id="feedback" class="feedback"></div>
+  </main>
+
+  <script>
+  const DATA = [
+    { en: 'a church', fi: 'kirkko' },
+    { en: 'a museum', fi: 'museo' },
+    { en: 'a library', fi: 'kirjasto' },
+    { en: 'a school', fi: 'koulu' },
+    { en: 'a park', fi: 'puisto' },
+    { en: 'a cinema', fi: 'elokuvateatteri' },
+    { en: 'a station', fi: 'asema' },
+    { en: 'a theatre', fi: 'teatteri' },
+    { en: 'a skyscraper', fi: 'pilvenpiirtäjä' },
+    { en: 'a hospital', fi: 'sairaala' },
+    { en: 'a shop', fi: 'kauppa' },
+    { en: 'a bank', fi: 'pankki' },
+    { en: 'a restaurant', fi: 'ravintola' },
+    { en: 'a café', fi: 'kahvila' },
+    { en: 'a department store', fi: 'tavaratalo' },
+    { en: 'a mall', fi: 'kauppakeskus' },
+  ];
+
+  const promptEl = document.getElementById('prompt');
+  const answerEl = document.getElementById('answer');
+  const feedbackEl = document.getElementById('feedback');
+  const doneEl = document.getElementById('done');
+  const rightEl = document.getElementById('right');
+  const wrongEl = document.getElementById('wrong');
+  const totalEl = document.getElementById('total');
+
+  totalEl.textContent = DATA.length;
+  let mode = 'FI_EN';
+
+  document.getElementById('modeFiEn').onclick = () => setMode('FI_EN');
+  document.getElementById('modeEnFi').onclick = () => setMode('EN_FI');
+
+  function setMode(m) { mode = m; reset(false); }
+  function shuffled(arr){ return [...arr].sort(() => Math.random() - 0.5); }
+
+  let queue = [], current=null, done=0, right=0, wrong=0;
+
+  function normalize(s){ return s.toLowerCase().trim(); }
+
+  function next(){
+    if(queue.length===0) queue = shuffled(DATA);
+    current = queue.pop();
+    feedbackEl.textContent = '';
+    answerEl.value = '';
+    doneEl.textContent = done;
+    if(mode==='FI_EN'){
+      promptEl.textContent = `Suomi → Englanti: “${current.fi}”`;
+    } else {
+      promptEl.textContent = `Englanti → Suomi: “${current.en}”`;
+    }
+  }
+
+  function check(showOnly=false){
+    const a = normalize(answerEl.value);
+    const correct = mode==='FI_EN' ? normalize(current.en) : normalize(current.fi);
+    if(showOnly){
+      feedbackEl.innerHTML = `Vastaus: ${current.fi} ⇄ ${current.en}`;
+      return;
+    }
+    if(a===correct){
+      right++; done++;
+      rightEl.textContent=right; doneEl.textContent=done;
+      feedbackEl.innerHTML='<span class="good">Oikein!</span>';
+      setTimeout(next,600);
+    } else {
+      wrong++;
+      wrongEl.textContent=wrong;
+      feedbackEl.innerHTML=`<span class="bad">Väärin.</span> Oikea vastaus: ${correct}`;
+      queue.unshift(current);
+    }
+  }
+
+  function reset(){ queue=shuffled(DATA); done=0; right=0; wrong=0; rightEl.textContent=0; wrongEl.textContent=0; doneEl.textContent=0; next(); }
+
+  document.getElementById('checkBtn').onclick=()=>check(false);
+  document.getElementById('showBtn').onclick=()=>check(true);
+  document.getElementById('skipBtn').onclick=()=>next();
+  document.getElementById('resetBtn').onclick=()=>reset();
+  document.addEventListener('keydown', e=>{ if(e.key==='Enter') check(false); });
+
+  reset();
+  </script>
+</body>
+</html>
